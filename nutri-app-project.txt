@@ -1,0 +1,201 @@
+// Estrutura do Projeto NutriWise
+
+/*
+ESTRUTURA DE PASTAS:
+/nutri-wise
+├── /public
+├── /src
+│   ├── /components
+│   ├── /pages
+│   ├── /services
+│   ├── /context
+│   ├── /hooks
+│   ├── /utils
+│   ├── /styles
+│   └── /assets
+├── package.json
+└── README.md
+*/
+
+// 1. Configurações Principais
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ChakraProvider } from '@chakra-ui/react';
+import { AuthProvider } from './context/AuthContext';
+import { PaymentProvider } from './context/PaymentContext';
+
+// 2. Importação de Páginas
+import HomePage from './pages/HomePage';
+import SignUpPage from './pages/SignUpPage';
+import ProfilePage from './pages/ProfilePage';
+import MealPlannerPage from './pages/MealPlannerPage';
+import PaymentPage from './pages/PaymentPage';
+import DashboardPage from './pages/DashboardPage';
+
+// 3. Serviços de Integração
+import { initializeFirebase } from './services/firebaseConfig';
+import { initializeStripe } from './services/paymentService';
+import WhatsAppIntegration from './services/whatsappService';
+
+// 4. Configuração de Preços (em CAD)
+const PRICING_PLANS = {
+  FREE_TRIAL: {
+    duration: 30, // dias
+    price: 0
+  },
+  MONTHLY: {
+    price: 19.99,
+    features: [
+      'Geração de cardápios personalizados',
+      'Acompanhamento nutricional',
+      'Suporte via WhatsApp'
+    ]
+  },
+  QUARTERLY: {
+    price: 49.99, // Desconto de 16%
+    features: [
+      'Todos os benefícios do plano mensal',
+      'Economia de 16%',
+      'Relatórios nutricionais detalhados'
+    ]
+  },
+  ANNUAL: {
+    price: 179.99, // Desconto de 25%
+    features: [
+      'Todos os benefícios dos planos anteriores',
+      'Economia de 25%',
+      'Consulta nutricional online 1x'
+    ]
+  }
+};
+
+// 5. Componente de Autenticação
+function App() {
+  return (
+    <ChakraProvider>
+      <AuthProvider>
+        <PaymentProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/meal-planner" element={<MealPlannerPage />} />
+              <Route path="/payment" element={<PaymentPage plans={PRICING_PLANS} />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
+            </Routes>
+          </BrowserRouter>
+        </PaymentProvider>
+      </AuthProvider>
+    </ChakraProvider>
+  );
+}
+
+// 6. Serviço de Autenticação
+const AuthService = {
+  signUp: async (email, password, profileData) => {
+    // Integração com Firebase Authentication
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        auth, 
+        email, 
+        password
+      );
+      
+      // Salvar dados adicionais no Firestore
+      await setDoc(doc(firestore, 'users', userCredential.user.uid), {
+        ...profileData,
+        trialStartDate: new Date(),
+        trialEndDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 dias
+      });
+
+      return userCredential.user;
+    } catch (error) {
+      console.error("Erro no cadastro", error);
+    }
+  },
+
+  checkTrialStatus: (user) => {
+    // Verificar se o período de trial ainda está ativo
+    const trialData = getUserTrialData(user.uid);
+    return trialData.trialEndDate > new Date();
+  }
+};
+
+// 7. Serviço de Pagamento com Stripe
+const PaymentService = {
+  createSubscription: async (user, plan) => {
+    const stripeCustomer = await stripe.customers.create({
+      email: user.email,
+      source: paymentMethod.id
+    });
+
+    const subscription = await stripe.subscriptions.create({
+      customer: stripeCustomer.id,
+      items: [{
+        price: PRICING_PLANS[plan].stripeProductId
+      }]
+    });
+
+    return subscription;
+  }
+};
+
+// 8. Serviço de Geração de Cardápio
+const MealPlannerService = {
+  generatePersonalizedMealPlan: async (userProfile) => {
+    // Lógica de geração de cardápio baseado no perfil
+    const mealPlan = await nutritionAPI.generatePlan(userProfile);
+    
+    // Enviar via WhatsApp
+    WhatsAppIntegration.sendMealPlan(userProfile.phone, mealPlan);
+
+    return mealPlan;
+  }
+};
+
+// 9. Configurações de Responsividade
+const responsiveStyles = {
+  mobile: {
+    width: '100%',
+    padding: '10px',
+    fontSize: '14px'
+  },
+  tablet: {
+    width: '90%',
+    padding: '15px',
+    fontSize: '16px'
+  },
+  desktop: {
+    width: '1200px',
+    padding: '20px',
+    fontSize: '18px'
+  }
+};
+
+// 10. Preparação para App Mobile (React Native)
+// Usar código compartilhado entre web e mobile
+const mobileAppConfig = {
+  platform: ['iOS', 'Android'],
+  framework: 'React Native',
+  codeSharePercentage: '80%'
+};
+
+export default App;
+
+// BIBLIOTECAS NECESSÁRIAS (package.json)
+/*
+{
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.10.0",
+    "@chakra-ui/react": "^2.5.1",
+    "firebase": "^9.17.1",
+    "stripe": "^12.0.0",
+    "axios": "^1.3.4",
+    "formik": "^2.2.9",
+    "yup": "^1.0.2"
+  }
+}
+*/
